@@ -2,7 +2,14 @@ pandas
 jupyterlab
 plotly
 dash
-pytube
 ipywidgets
-git+https://github.com/openai/whisper.git
 tqdm
+levenshtein
+
+git+https://github.com/openai/whisper.git
+
+# Instead of adding pytube directly, we're going to use this particular commit.
+# At the time of writing this, there was an open pull request to fix empty
+# channel objects. This was the only way I could figure out how to use Channels:
+# https://github.com/pytube/pytube/pull/1409
+git+https://github.com/pishiko/pytube.git@42a7d8322dd7749a9e950baf6860d115bbeaedfc
