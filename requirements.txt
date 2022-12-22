@@ -1,0 +1,8 @@
+pandas
+jupyterlab
+plotly
+dash
+pytube
+ipywidgets
+git+https://github.com/openai/whisper.git
+tqdm
