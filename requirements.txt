@@ -5,6 +5,10 @@ dash
 ipywidgets
 tqdm
 levenshtein
+tqdm
+matplotlib
+spotipy
+
 
 git+https://github.com/openai/whisper.git
 
