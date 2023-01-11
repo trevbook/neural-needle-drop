@@ -8,6 +8,8 @@ levenshtein
 tqdm
 matplotlib
 spotipy
+dash_bootstrap_components
+dash_mantine_components
 
 
 git+https://github.com/openai/whisper.git
