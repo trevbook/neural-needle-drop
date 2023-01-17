@@ -18,7 +18,7 @@ Totally forgot that I made this DEVLOG file, so I figured that I ought to pick i
 - I spent some time creating methods to enrich the data
 - I spent some time creating a prototype for the Search functionality in Dash 
 
-### Jan. 13th, 2023
+### Jan. 12th, 2023
 - I started learning about MySQL, and played around with setting up a dummy server (thanks to some help from my favorite robot friend, ChatGPT!) The following represents my progress by the end of my experimentation: 
 
 ![](./devlog-assets/mySQL%20day%20one%20experiments.png)
@@ -27,3 +27,6 @@ Totally forgot that I made this DEVLOG file, so I figured that I ought to pick i
 
 - I also started exploring VSCode a lot more. I followed [this tutorial](https://vscode.rocks/minimal-ui/) to add a "zen mode" keyboard shortcut - CTRL+T, CTRL+Z. It'll be helpful when I want to JUST be looking at a Jupyter Notebook in the window - sorta like Zen mode, but windowed. 
 
+### Jan. 16th, 2023
+- I started playing around with [Pinecone](https://www.pinecone.io/), which is a vector database. My experiments are within the `Pinecone Experimentation` notebook.  
+- I also added a new table to my MySQL database: `embeddings`. This table - as the name would suggest - contains embeddings for each of the videos. 
