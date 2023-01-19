@@ -30,3 +30,11 @@ Totally forgot that I made this DEVLOG file, so I figured that I ought to pick i
 ### Jan. 16th, 2023
 - I started playing around with [Pinecone](https://www.pinecone.io/), which is a vector database. My experiments are within the `Pinecone Experimentation` notebook.  
 - I also added a new table to my MySQL database: `embeddings`. This table - as the name would suggest - contains embeddings for each of the videos. 
+
+
+### Jan. 18th, 2023
+- I made the `transcriptions` table within the MySQL database
+- I finally finished uploading all of my vectors to Pinecone, and then wrote the `Embedding Search with MySQL and Pinecone` notebook - this combined my work with MySQL and Pinecone to make a *much* faster querying process
+- I started the `results_prototype.py` Dash app to prototype how to display the results from a Dash video 
+- Once I'd gotten a fairly rudimentary version of the Search Results look and feel, I moved the component into the newly-created `custom_components.py`, and then integrated it into the Search prototype. 
+  - This marks the first time I've got a fully-fledged working prototype of this tool using *two* different database systems! 

@@ -11,7 +11,7 @@ spotipy
 dash_bootstrap_components
 dash_mantine_components
 pinecone-client
-
+openai
 
 git+https://github.com/openai/whisper.git
 

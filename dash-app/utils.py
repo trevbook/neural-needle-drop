@@ -13,44 +13,86 @@ from pathlib import Path
 import pandas as pd
 import math
 import traceback
+import pandas as pd
+import pinecone
+import os
+import mysql.connector
+import traceback
+import numpy as np
+import math
+from tqdm import tqdm
 from time import time
-from time import sleep
-from IPython.display import display, Markdown
+import requests
+from requests.structures import CaseInsensitiveDict
+import json
+from pathlib import Path
+import traceback
+
+# Set up the connection to the MySQL server
+cnx = mysql.connector.connect(
+    user='root', password=os.getenv("MYSQL_PASSWORD"), 
+    host='localhost', database='neural-needle-drop')
+
+# Create a cursor 
+cursor = cnx.cursor()
+
+# Initialize the Pinecone API connection
+pinecone.init(api_key=os.getenv("PINECONE_API_KEY"))
+
+# Setting up the index 
+pinecone_index = pinecone.Index("neural-needledrop-prototype")
+pinecone_index.describe_index_stats()
 
 
-# This method will return a list of ndarrays, each representing text embeddings of
+# This method will return a list of ndarrays, each representing text embeddings of 
 # the text in each index of the input_text_list list
 def generate_embeddings(input_text_list, print_exceptions=False):
-    # Get the OpenAI API key from the environment variables
+    
+    # Get the OpenAI API key from the environment variables 
     api_key = os.getenv("OPENAI_API_KEY", "")
-
+    
     # Build the API request
     url = "https://api.openai.com/v1/embeddings"
     headers = CaseInsensitiveDict()
     headers["Content-Type"] = "application/json"
     headers["Authorization"] = "Bearer " + api_key
     data = """{"input": """ + json.dumps(input_text_list) + ""","model":"text-embedding-ada-002"}"""
-
+    
     # Send the API request
     resp = requests.post(url, headers=headers, data=data)
-
-    # If the request was successful, return ndarrays of the embeddings. Otherwise, return None objects
+    
+    # If the request was successful, return ndarrays of the embeddings. Otherwise, return None objects 
     if resp.status_code == 200:
         return [np.asarray(data_object['embedding']) for data_object in resp.json()['data']]
     else:
         if (print_exceptions):
             print(resp.json())
         return [None for txt in input_text_list]
-
-
+    
 # This method will generate the embedding for a single string
-def generate_embedding(txt_input):
-    return (generate_embeddings([txt_input])[0])
+def generate_embedding(txt_input, print_exceptions=False):
+    return (generate_embeddings([txt_input], print_exceptions)[0])
 
+def query_to_df(query, print_error=False):
+    '''Query the active MySQL database and return results in a DataFrame'''
 
-# This method will return the cosine similarity of two ndarrays
-def cosine_sim(a, b):
-    return dot(a, b) / (norm(a) * norm(b))
+    # Try to return the results as a DataFrame
+    try:
+        # Execute the query
+        cursor.execute(query)
+
+        # Fetch the results 
+        res = cursor.fetchall()
+
+        # Return a DataFrame
+        return pd.DataFrame(res, columns=[i[0] for i in cursor.description])
+
+    # If we run into an Exception, return None
+    except Exception as e:
+        if (print_error):
+            print(f"Ran into the following error:\n{e}\nStack trace:")
+            print(traceback.format_exc())
+        return None
 
 
 # This method will load in the tnd_data_df
@@ -205,3 +247,117 @@ def segment_search(search_txt,
     print(f"The similarity calculation took {end_time:.2f} seconds.")
 
     return segment_emb_sim_df, top_videos_by_top_segments
+
+
+def neural_tnd_video_search(search_str):
+
+    """
+    This method will run 'neural search' across all of TheNeedleDrop's videos, using 
+    the methodology I'd established with Pinecone and MySQL. 
+
+    It'll return two DataFrames: one containing the information about the top scoring 
+    videos, and another containing the segments that scored the highest for this video.  
+    """
+
+    # Get the embedding for the search string
+    search_str_emb = generate_embedding(search_str)
+
+    # ================================================
+
+    # Query the Pinecone index for the 5000 most similar 
+    pinecone_results = pinecone_index.query(
+        vector=search_str_emb.tolist(),
+        filter={
+            "embedding_type": "segment_chunk"
+        },
+        top_k=3000,
+        include_metadata=True,
+        namespace="video_embeddings"
+    )
+
+    # ================================================
+
+    # Create a DataFrame from the Pinecone results 
+    top_segment_matches_original_df = pd.DataFrame.from_records(
+        [{"id": x.id, "score": x.score} | x.metadata
+            for x in pinecone_results['matches']])
+
+    grouped_sorted_segment_df = top_segment_matches_original_df.groupby("video_id")
+    top_segment_matches_df = grouped_sorted_segment_df.apply(
+        lambda x: x.sort_values("score", ascending=False).head(5)).reset_index(
+        drop=True).copy()
+
+    # Determine the average score across the different videos 
+    avg_segment_sim_by_video_df = top_segment_matches_df.groupby("video_id")["score"].mean(numeric_only=True).reset_index().rename(
+        columns={"score": "avg_segment_sim"}).sort_values("avg_segment_sim", ascending=False)
+
+    median_segment_sim_by_video_df = top_segment_matches_df.groupby("video_id")["score"].median(numeric_only=True).reset_index().rename(
+        columns={"score": "median_segment_sim"}).sort_values("median_segment_sim", ascending=False)
+
+    segment_ct_by_video_df = top_segment_matches_df.groupby("video_id").count().reset_index().rename(
+        columns={"id": "segment_ct"}).sort_values("segment_ct", ascending=False)[["video_id", "segment_ct"]]
+
+    # Create the "scored_video_df", which tries to merge some degree of "relevance" and "frequency"
+    scored_video_df = segment_ct_by_video_df.merge(avg_segment_sim_by_video_df, on="video_id")
+    scored_video_df = scored_video_df.merge(median_segment_sim_by_video_df, on="video_id")
+    scored_video_df["neural_search_score"] = scored_video_df["segment_ct"] * scored_video_df["avg_segment_sim"]
+    scored_video_df = scored_video_df.sort_values("neural_search_score", ascending=False)
+
+    # We'll also add in information about the most similar segment in each video 
+    top_single_segments_per_video_df = top_segment_matches_df[top_segment_matches_df["video_id"].isin(
+        list(scored_video_df.head(10)["video_id"]))]
+    grouped_sorted_segment_df = top_single_segments_per_video_df.groupby("video_id")
+    top_single_segments_per_video_df = grouped_sorted_segment_df.apply(
+        lambda x: x.sort_values("score", ascending=False).head(1)).reset_index(
+        drop=True).copy()
+
+    # ================================================
+
+    # This query will determine the information for the top videos
+    top_scored_video_info_query_filter_str = " OR ".join([f'id="{row.video_id}"' for row in scored_video_df.head(10).itertuples()])
+    top_scored_video_info_query = f"""
+    SELECT
+        *
+    FROM
+        video_details
+    WHERE {top_scored_video_info_query_filter_str}"""
+
+    # Execute the above query 
+    top_scored_video_info_df = query_to_df(top_scored_video_info_query, print_error=True)
+
+    # Merge in some of the scores 
+    top_scored_video_info_df = top_scored_video_info_df.merge(scored_video_df, left_on="id", right_on="video_id").drop(
+        columns=["video_id"]).sort_values("neural_search_score", ascending=False)
+
+    # ================================================
+
+    # Creating a "filter string" for the transcription query
+    all_video_filter_str_list = []
+    for row in top_single_segments_per_video_df.itertuples():
+        segment_filter_str = " OR ".join([f"segment={num}" for num in list(range(int(row.start_segment), int(row.end_segment)+1))])
+        all_video_filter_str_list.append(f"id='{row.video_id}' AND ({segment_filter_str})")
+    transcription_filter_str = " OR ".join([f"({cur_vid_filter_str})" for cur_vid_filter_str in all_video_filter_str_list])
+
+    # Crafting the transcription query 
+    top_segment_transcriptions_query = f"""SELECT * FROM transcriptions WHERE {transcription_filter_str}"""
+
+    # Executing the transcription query 
+    top_segment_transcriptions_df = query_to_df(top_segment_transcriptions_query, print_error=True)
+
+    # ================================================
+
+    # Join together the individual segments to create segment chunks
+    top_segment_chunk_per_video_df = top_segment_transcriptions_df.groupby("id")["text"].apply(list).reset_index()
+    top_segment_chunk_per_video_df["text"] = top_segment_chunk_per_video_df["text"].apply(
+        lambda seg_list: " ".join([seg.strip() for seg in seg_list]))
+    top_segment_chunk_per_video_df = top_segment_chunk_per_video_df.rename(columns={"text": "segment_transcription"})
+    top_segment_chunk_per_video_df = top_segment_chunk_per_video_df.merge(
+        top_single_segments_per_video_df[["score", "video_id"]].rename(columns={"score": "top_segment_score"}), 
+        left_on="id", right_on="video_id")
+
+    # Merge these segment chunks back into the top_scored_video_info_df DataFrame
+    top_scored_video_info_df = top_scored_video_info_df.merge(top_segment_chunk_per_video_df, on="id")
+
+    # ================================================
+
+    return top_scored_video_info_df
