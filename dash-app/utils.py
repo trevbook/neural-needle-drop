@@ -6,27 +6,14 @@ import os
 from requests.structures import CaseInsensitiveDict
 import numpy as np
 import json
-from numpy import dot
-from numpy.linalg import norm
 from tqdm import tqdm
 from pathlib import Path
 import pandas as pd
 import math
 import traceback
-import pandas as pd
 import pinecone
-import os
 import mysql.connector
-import traceback
-import numpy as np
-import math
-from tqdm import tqdm
 from time import time
-import requests
-from requests.structures import CaseInsensitiveDict
-import json
-from pathlib import Path
-import traceback
 
 # Set up the connection to the MySQL server
 cnx = mysql.connector.connect(
@@ -249,7 +236,7 @@ def segment_search(search_txt,
     return segment_emb_sim_df, top_videos_by_top_segments
 
 
-def neural_tnd_video_search(search_str):
+def neural_tnd_video_search(search_str, print_timing=False):
 
     """
     This method will run 'neural search' across all of TheNeedleDrop's videos, using 
@@ -259,10 +246,19 @@ def neural_tnd_video_search(search_str):
     videos, and another containing the segments that scored the highest for this video.  
     """
 
+    start_time = time()
+    function_start_time = time()
+
     # Get the embedding for the search string
     search_str_emb = generate_embedding(search_str)
 
+    total_time = time()-start_time
+    if (print_timing):
+        print(f"[{total_time:.2f}] Generated embedding from search string")
+
     # ================================================
+
+    start_time = time()
 
     # Query the Pinecone index for the 5000 most similar 
     pinecone_results = pinecone_index.query(
@@ -275,25 +271,29 @@ def neural_tnd_video_search(search_str):
         namespace="video_embeddings"
     )
 
+    total_time = time()-start_time
+    if (print_timing):
+        print(f"[{total_time:.2f}] Searched Pinecone for most similar vectors")
+
     # ================================================
+
+    start_time = time()
 
     # Create a DataFrame from the Pinecone results 
     top_segment_matches_original_df = pd.DataFrame.from_records(
         [{"id": x.id, "score": x.score} | x.metadata
             for x in pinecone_results['matches']])
-
-    grouped_sorted_segment_df = top_segment_matches_original_df.groupby("video_id")
-    top_segment_matches_df = grouped_sorted_segment_df.apply(
-        lambda x: x.sort_values("score", ascending=False).head(5)).reset_index(
-        drop=True).copy()
+    top_segment_matches_df = top_segment_matches_original_df.sort_values("score", ascending=False).groupby("video_id").head(5).reset_index().copy()
 
     # Determine the average score across the different videos 
     avg_segment_sim_by_video_df = top_segment_matches_df.groupby("video_id")["score"].mean(numeric_only=True).reset_index().rename(
         columns={"score": "avg_segment_sim"}).sort_values("avg_segment_sim", ascending=False)
 
+    # Determine the mean score across the different videos
     median_segment_sim_by_video_df = top_segment_matches_df.groupby("video_id")["score"].median(numeric_only=True).reset_index().rename(
         columns={"score": "median_segment_sim"}).sort_values("median_segment_sim", ascending=False)
 
+    # Determine how many segments each video has in the results
     segment_ct_by_video_df = top_segment_matches_df.groupby("video_id").count().reset_index().rename(
         columns={"id": "segment_ct"}).sort_values("segment_ct", ascending=False)[["video_id", "segment_ct"]]
 
@@ -310,8 +310,13 @@ def neural_tnd_video_search(search_str):
     top_single_segments_per_video_df = grouped_sorted_segment_df.apply(
         lambda x: x.sort_values("score", ascending=False).head(1)).reset_index(
         drop=True).copy()
+    total_time = time()-start_time
+    if (print_timing):
+        print(f"[{total_time:.2f}] Transformed Pinecone results")
 
     # ================================================
+
+    start_time = time()
 
     # This query will determine the information for the top videos
     top_scored_video_info_query_filter_str = " OR ".join([f'id="{row.video_id}"' for row in scored_video_df.head(10).itertuples()])
@@ -329,22 +334,65 @@ def neural_tnd_video_search(search_str):
     top_scored_video_info_df = top_scored_video_info_df.merge(scored_video_df, left_on="id", right_on="video_id").drop(
         columns=["video_id"]).sort_values("neural_search_score", ascending=False)
 
+    total_time = time()-start_time
+    if (print_timing):
+        print(f"[{total_time:.2f}] Retrieved video information from MySQL server")
+
     # ================================================
+
+    start_time = time()
 
     # Creating a "filter string" for the transcription query
-    all_video_filter_str_list = []
-    for row in top_single_segments_per_video_df.itertuples():
-        segment_filter_str = " OR ".join([f"segment={num}" for num in list(range(int(row.start_segment), int(row.end_segment)+1))])
-        all_video_filter_str_list.append(f"id='{row.video_id}' AND ({segment_filter_str})")
-    transcription_filter_str = " OR ".join([f"({cur_vid_filter_str})" for cur_vid_filter_str in all_video_filter_str_list])
+    # all_video_filter_str_list = []
+    # for row in top_single_segments_per_video_df.itertuples():
+    #     segment_filter_str = " OR ".join([f"segment={num}" for num in list(range(int(row.start_segment), int(row.end_segment)+1))])
+    #     all_video_filter_str_list.append(f"id='{row.video_id}' AND ({segment_filter_str})")
+    # transcription_filter_str = " OR ".join([f"({cur_vid_filter_str})" for cur_vid_filter_str in all_video_filter_str_list])
 
-    # Crafting the transcription query 
-    top_segment_transcriptions_query = f"""SELECT * FROM transcriptions WHERE {transcription_filter_str}"""
+    # # Crafting the transcription query 
+    # top_segment_transcriptions_query = f"""SELECT * FROM transcriptions WHERE {transcription_filter_str}"""
 
-    # Executing the transcription query 
-    top_segment_transcriptions_df = query_to_df(top_segment_transcriptions_query, print_error=True)
+    # # Executing the transcription query 
+    # top_segment_transcriptions_df = query_to_df(top_segment_transcriptions_query, print_error=True)
+
+    # Create the temporary table within the MySQL database
+    temp_table_creation_query = """
+    CREATE TEMPORARY TABLE top_transcriptions (
+        id VARCHAR(100),
+        segment INT
+    )"""
+    cursor.execute(temp_table_creation_query)
+
+    # Insert data into the temporary table 
+    temp_table_insertion_query = """
+    INSERT INTO top_transcriptions (id, segment) VALUES (%s, %s)
+    """
+    data = [(row.video_id, segment) for row in top_single_segments_per_video_df.itertuples() for segment in list(range(int(row.start_segment), int(row.end_segment)+1))]
+    cursor.executemany(temp_table_insertion_query, data)
+
+    # Now, we're going to merge together the tables
+    top_segment_transcriptions_df = query_to_df(
+        """
+    SELECT 
+        transcriptions.*
+    FROM
+        transcriptions
+    JOIN
+        top_transcriptions
+    ON
+        transcriptions.id=top_transcriptions.id
+        AND
+        transcriptions.segment = top_transcriptions.segment 
+    """
+    )
+    
+    total_time = time()-start_time
+    if (print_timing):
+        print(f"[{total_time:.2f}] Retrieved transcription excerpts from MySQL server")
 
     # ================================================
+
+    start_time = time()
 
     # Join together the individual segments to create segment chunks
     top_segment_chunk_per_video_df = top_segment_transcriptions_df.groupby("id")["text"].apply(list).reset_index()
@@ -358,6 +406,14 @@ def neural_tnd_video_search(search_str):
     # Merge these segment chunks back into the top_scored_video_info_df DataFrame
     top_scored_video_info_df = top_scored_video_info_df.merge(top_segment_chunk_per_video_df, on="id")
 
+    total_time = time()-start_time
+    if (print_timing):
+        print(f"[{total_time:.2f}] Transformed transcription and video information DataFrames")
+
     # ================================================
+
+    final_total_time = time()-function_start_time
+    if (print_timing):
+        print(f"\nTOTAL TIME TO SEARCH: {final_total_time:.2f}")
 
     return top_scored_video_info_df

@@ -141,19 +141,12 @@ app.layout = dbc.Container(
 def search_videos(trigger_search_button_n_clicks,
                   search_text_input):
 
-    # Indicate that we're using a global variable
-    global tnd_data_df
-    global segment_emb_df
-
     # If the user hasn't inputted a Search, we're not going to do anything
     if (search_text_input == "" or search_text_input is None or trigger_search_button_n_clicks == 0):
         raise PreventUpdate
 
-    # Handle the search
-    sleep(5)
-
     # Now that the data's been loaded, we're going to run the segment search
-    top_scoring_video_details = custom_utils.neural_tnd_video_search(search_text_input.strip())
+    top_scoring_video_details = custom_utils.neural_tnd_video_search(search_text_input.strip(), print_timing=True)
 
     # Generate some Div to put into the Search results
     new_search_results_div = html.Div(

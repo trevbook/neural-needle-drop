@@ -38,3 +38,8 @@ Totally forgot that I made this DEVLOG file, so I figured that I ought to pick i
 - I started the `results_prototype.py` Dash app to prototype how to display the results from a Dash video 
 - Once I'd gotten a fairly rudimentary version of the Search Results look and feel, I moved the component into the newly-created `custom_components.py`, and then integrated it into the Search prototype. 
   - This marks the first time I've got a fully-fledged working prototype of this tool using *two* different database systems! 
+
+
+### Jan. 22nd, 2023
+- Spent some time trying to benchmark and speed up the neural search. Got things down to ~3sec for total search time (down from 13 seconds; one of these things was just a leftover "sleep for 5 seconds" statement, so I really dropped it from 8sec --> 3sec)
+
