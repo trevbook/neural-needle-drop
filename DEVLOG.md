@@ -43,3 +43,9 @@ Totally forgot that I made this DEVLOG file, so I figured that I ought to pick i
 ### Jan. 22nd, 2023
 - Spent some time trying to benchmark and speed up the neural search. Got things down to ~3sec for total search time (down from 13 seconds; one of these things was just a leftover "sleep for 5 seconds" statement, so I really dropped it from 8sec --> 3sec)
 
+
+### Jan. 23rd, 2023
+- Creating the `enriched_video_details` table within the MySQL database
+- Incorporated filters into the Search App Prototype 
+
+

@@ -32,9 +32,30 @@ app.title = "Neural Needledrop"
 # ========================
 # The cells below will load in necessary data for the
 
-# We'll start without the tnd_data / embeddings loaded
-tnd_data_df = None
-segment_emb_df = None
+# Run a SQL query to determine the minimum and maximum year for the year filter
+min_max_year_df = custom_utils.query_to_df("""
+SELECT
+    MIN(YEAR(publish_date)) as min_year,
+    MAX(YEAR(publish_date)) as max_year
+FROM
+    video_details 
+""")
+min_year_in_data = min_max_year_df.iloc[0].min_year
+max_year_in_data = min_max_year_df.iloc[0].max_year
+
+# Indicate the different video types that're in the data
+video_types_to_labels = {
+    "album_review": "Album Review",
+    "ep_review": "EP Review",
+    "mixtape_review": "Mixtape Review",
+    "track_review": "Track Review",
+    "weekly_track_roundup": "Weekly Track Roundup",
+    "yunoreview": "Y U NO Review?",
+    "vinyl_update": "Vinyl Update",
+    "tnd_podcast": "TND Podcast",
+    "misc": "Miscellaneous",
+}
+
 
 # ========================
 #         LAYOUT
@@ -93,6 +114,83 @@ app.layout = dbc.Container(
                             ],
                         )
                     ],
+                    style={"marginBottom": "10px"}
+                ),
+
+                # This Row will contain the filtering interface
+                dbc.Row(
+                    children=[
+
+                        # This Column contains the year filter
+                        dbc.Col(
+                            width=4,
+                            children=[
+                                html.B("Year"),
+                                html.Div(
+                                    children=[
+                                        dmc.RangeSlider(
+                                            id="year-filter-range-slider",
+                                            value=[min_year_in_data,
+                                                   max_year_in_data],
+                                            min=min_year_in_data,
+                                            max=max_year_in_data,
+                                            step=1,
+                                            minRange=1
+                                        )
+                                    ],
+                                    style={"position": "relative", "top": "25%"}
+                                )
+                            ]
+                        ),
+
+                        # This Column contains the video type filter
+                        dbc.Col(
+                            width=4,
+                            children=[
+                                html.B("Video Type"),
+                                html.Div(
+                                    children=[
+                                        dmc.MultiSelect(
+                                            placeholder="No filter set",
+                                            id="video-type-filter-select",
+                                            value=[],
+                                            data=[
+                                                {"value": key, "label": val} for key, val in video_types_to_labels.items()
+                                            ],
+                                        )
+                                    ],
+                                    style={"position": "relative", "top": "10%"}
+                                )
+                            ]
+                        ),
+
+                        # This Column contains the review score filter
+                        dbc.Col(
+                            width=4,
+                            children=[
+                                html.Div(
+                                    id="review-score-filter-div",
+                                    children=[
+                                        html.B("Review Score"),
+                                        html.Div(
+                                            children=[
+                                                dmc.RangeSlider(
+                                                    id="review-score-filter-range-slider",
+                                                    value=[0, 10],
+                                                    min=0,
+                                                    max=10,
+                                                    step=1,
+                                                    minRange=1
+                                                )
+                                            ],
+                                            style={"position": "relative", "top": "25%"}
+                                        )
+                                    ],
+                                    style={"visibility": "hidden"}
+                                )
+                            ]
+                        )
+                    ],
                     style={"marginBottom": "30px"}
                 ),
 
@@ -137,24 +235,43 @@ app.layout = dbc.Container(
 # This callback will trigger the video search when the user clicks the "search" button
 @app.callback(output=Output("search_results_div", "children"),
               inputs=[Input("trigger_search_button", "n_clicks")],
-              state=[State("search_text_input", "value")])
+              state=[State("search_text_input", "value"),
+                     State("year-filter-range-slider", "value"),
+                     State("video-type-filter-select", "value"),
+                     State("review-score-filter-range-slider", "value")])
 def search_videos(trigger_search_button_n_clicks,
-                  search_text_input):
+                  search_text_input,
+                  year_filter_values, video_type_filter_values, review_score_filter_values):
 
     # If the user hasn't inputted a Search, we're not going to do anything
     if (search_text_input == "" or search_text_input is None or trigger_search_button_n_clicks == 0):
         raise PreventUpdate
 
     # Now that the data's been loaded, we're going to run the segment search
-    top_scoring_video_details = custom_utils.neural_tnd_video_search(search_text_input.strip(), print_timing=True)
+    top_scoring_video_details = custom_utils.neural_tnd_video_search(
+        search_text_input.strip(), year_filter_values, 
+        video_type_filter_values, review_score_filter_values,
+        print_timing=True)
 
     # Generate some Div to put into the Search results
     new_search_results_div = html.Div(
-        children=[custom_components.generate_result_div(row) for row in top_scoring_video_details.itertuples()]
+        children=[custom_components.generate_result_div(
+            row) for row in top_scoring_video_details.itertuples()]
     )
 
     # Return the information about the data being loaded
     return new_search_results_div
+
+
+# This callback will show the review-score-filter-div when "Album Review" is the only
+# value selected in the video-type-filter-select
+@app.callback(output=Output("review-score-filter-div", "style"),
+              inputs=[Input("video-type-filter-select", "value")])
+def hide_show_review_score_filter(video_type_filter_selection):
+    if ("album_review" in video_type_filter_selection and len(video_type_filter_selection) == 1):
+        return {"visibility": "visible", "height": "100%"}
+    else:
+        return {"visibility": "hidden"}
 
 
 # ========================
