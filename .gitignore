@@ -130,3 +130,7 @@ dmypy.json
 
 # data/ folder
 data/
+
+# All of the data within solr-index folder
+solr-index/solr-data/*
+

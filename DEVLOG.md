@@ -49,3 +49,12 @@ Totally forgot that I made this DEVLOG file, so I figured that I ought to pick i
 - Incorporated filters into the Search App Prototype 
 
 
+### Jan. 24th, 2023
+- Started investigating the prospect of setting up a Solr server to run basic keyword queries on my data. I'm experimenting with starting this Solr server within a Docker container; if all goes well, I'll eventually move this to an EC2 instance or something (so it can be accessed from the cloud)
+  - A lot of this was done w/ ChatGPT, but I also used the ["Solr in Docker" documentation](https://solr.apache.org/guide/solr/latest/deployment-guide/solr-in-docker.html) to guide me! 
+- After toying around with the Solr server / Docker container for a bit, I made the **`Experimenting with Solr.ipynb`** notebook to test that I could properly configure & query from my core. There's a lot of work to be done here, but it seems to be working in a rudimentary way, which is solid! 
+- I also started the `viewing_prototype.py` Dash app, which tries to place the transcript under the video (and allows you to click around through the video). There's still a *decent* amount to figure out, but... I think it's a decent start!  
+
+
+![](./devlog-assets/viewing%20prototype.png)
+
