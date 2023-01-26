@@ -67,7 +67,23 @@ app.layout = dbc.Container(
     children=[
 
         # Declare a couple of different Stores
-        dcc.Store(id="data_loaded_store", data=False),
+        dcc.Store(id="query_emb", data=None),
+
+        # Create a Modal
+        dbc.Modal(
+            id="transcription-modal",
+            children=[
+                dcc.Loading(
+                    children=[
+                        html.Div(
+                            id="transcription-modal-content"
+                        )
+                    ]
+                )
+            ],
+            is_open=False,
+            size="xl"
+        ),
 
         # We're going to wrap everything AGAIN - this time in a Div
         html.Div(
@@ -183,7 +199,8 @@ app.layout = dbc.Container(
                                                     minRange=1
                                                 )
                                             ],
-                                            style={"position": "relative", "top": "25%"}
+                                            style={
+                                                "position": "relative", "top": "25%"}
                                         )
                                     ],
                                     style={"visibility": "hidden"}
@@ -233,7 +250,8 @@ app.layout = dbc.Container(
 
 
 # This callback will trigger the video search when the user clicks the "search" button
-@app.callback(output=Output("search_results_div", "children"),
+@app.callback(output=[Output("search_results_div", "children"),
+                      Output("query_emb", "data")],
               inputs=[Input("trigger_search_button", "n_clicks")],
               state=[State("search_text_input", "value"),
                      State("year-filter-range-slider", "value"),
@@ -248,10 +266,10 @@ def search_videos(trigger_search_button_n_clicks,
         raise PreventUpdate
 
     # Now that the data's been loaded, we're going to run the segment search
-    top_scoring_video_details = custom_utils.neural_tnd_video_search(
-        search_text_input.strip(), year_filter_values, 
+    top_scoring_video_details, query_emb = custom_utils.neural_tnd_video_search(
+        search_text_input.strip(), year_filter_values,
         video_type_filter_values, review_score_filter_values,
-        print_timing=True)
+        print_timing=True, return_emb=True)
 
     # Generate some Div to put into the Search results
     new_search_results_div = html.Div(
@@ -260,7 +278,7 @@ def search_videos(trigger_search_button_n_clicks,
     )
 
     # Return the information about the data being loaded
-    return new_search_results_div
+    return new_search_results_div, query_emb.tolist()
 
 
 # This callback will show the review-score-filter-div when "Album Review" is the only
@@ -272,6 +290,38 @@ def hide_show_review_score_filter(video_type_filter_selection):
         return {"visibility": "visible", "height": "100%"}
     else:
         return {"visibility": "hidden"}
+
+
+@app.callback(output=[Output("transcription-modal-content", "children"),
+                      Output("transcription-modal", "is_open")],
+              inputs=[
+                  Input({"type": "video-link", "video_id": ALL}, "n_clicks")],
+              state=[State("search_text_input", "value"),
+                     State("query_emb", "data")], prevent_initial_call=True)
+def update_and_open_modal(n_clicks,
+                          user_query,
+                          query_emb):
+
+    
+    if (False not in [x is None for x in n_clicks]):
+        raise PreventUpdate
+
+    try:
+        # Determine which video was clicked from the callback context
+        input_id = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+        video_id = json.loads(input_id)["video_id"]
+
+        print(f"\ntriggered_video_id is {input_id}\nn_clicks is {n_clicks}")
+
+        # Generate the content for the modal
+        modal_content = custom_components.generate_transcription_display(
+            video_id, user_query, query_emb)
+
+        # Return the modal content (and open it)
+        return modal_content, True
+
+    except Exception as e:
+        print(e)
 
 
 # ========================

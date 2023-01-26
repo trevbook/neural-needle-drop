@@ -58,3 +58,8 @@ Totally forgot that I made this DEVLOG file, so I figured that I ought to pick i
 
 ![](./devlog-assets/viewing%20prototype.png)
 
+
+### Jan. 25th, 2023
+- Spent a while throughout the day designing a custom Dash component that'd allow me to get some nice hover effects / styling on the transcript segments (so as to avoid everything being buttons...) I eventually settled on something, and then published it to [a GitLab repo (called "transcription-display")](https://gitlab.com/custom-dash-components/transcript-display)
+- I edited the Search App prototype to incorporate the Transcription Display, and got something pretty solid working! I think this is honestly a solid MVP - it's pretty much the exact app I'd envisioned when I'd first thought of things about a month ago. There are plenty of additional features to add, but I should be excited that I got something working this far. 
+

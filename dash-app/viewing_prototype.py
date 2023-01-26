@@ -10,10 +10,11 @@ import dash
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 from dash.exceptions import PreventUpdate
-from dash import html, Input, Output, State, MATCH, ALL, callback_context, dcc
+from dash import html, Input, Output, State, MATCH, ALL, callback_context, callback, dcc
 import dash_player as dp
 from utils import query_to_df
 import json
+from transcription_display import TranscriptionDisplay
 
 # Declaring the app and server objects that'll be used throughout the app
 app = dash.Dash(__name__,
@@ -29,14 +30,23 @@ app.title = "Video Viewing Prototype"
 # ========================
 # The cells below will load in necessary data for the Dash app
 
+# Indicating what the user's search query is 
+user_search_query = "Man on the moon, spaceship going to the firey depths of Hell"
+
 # Spoof the input, which is a video ID
-input_video_id = "__PxaWntvhg"
+input_video_id = "J_LvLhFq2IU"
 
 # Load the transcription data for this input video
 input_video_transcription_df = query_to_df(f"""
 SELECT * FROM transcriptions
 WHERE id='{input_video_id}' AND segment != -1
 """)
+
+# Open the files with the test information
+with open("data/test_segment_chunk_df.json", "r") as json_file:
+    segment_chunks = json.load(json_file)
+with open("data/test_segment_info_df.json", "r") as json_file:
+    segment_info = json.load(json_file)
 
 # ========================
 #    CUSTOM COMPONENTS
@@ -89,7 +99,7 @@ app.layout = dbc.Container(
                     controls=True,
                     width="100%",
                     height="600px",
-                    playing=True,
+                    playing=False,
                     seekTo=0
                 ),
             ]
@@ -97,19 +107,22 @@ app.layout = dbc.Container(
 
         dbc.Row(
             children=[
-                "Query Information Row"
+                dcc.Markdown(f"""
+                ### **Query:** {user_search_query}
+                """)
             ]
         ),
 
         dbc.Row(
             children=[
-                html.Div(
-                    children=[
-                        segment_text_link(row.text, row.start_time) for
-                        row in input_video_transcription_df.itertuples()
-                    ],
-                    style={"display": "inline-block"}
-                )
+                # html.Div(
+                #     children=[
+                #         segment_text_link(row.text, row.start_time) for
+                #         row in input_video_transcription_df.itertuples()
+                #     ],
+                #     style={"display": "inline-block"}
+                # )
+                TranscriptionDisplay(segment_chunks=segment_chunks, segment_info=segment_info, id="transcription-display")
             ]
         )
     ],
@@ -123,23 +136,14 @@ app.layout = dbc.Container(
 # All of the callbacks for the file will be below
 
 # This callback will change the position of the video based on the seek value
-@app.callback(Output("dash-player", "seekTo"),
-              Input({"type": "segment_text_button", "seek": ALL}, "n_clicks"))
-def update_player_seek(n_clicks):
+@callback(Output("dash-player", "seekTo"),
+              Input("transcription-display", "seek"))
+def update_player_seek(seek):
 
-    try:
-        triggering_seek_info_dict_str = dash.callback_context.triggered[0]['prop_id'].split(".n_clicks")[
-            0]
-        if (triggering_seek_info_dict_str == "."):
-            return 0
-        else:
-            triggering_seek_info_dict = json.loads(
-                triggering_seek_info_dict_str)
-            new_seek_val = triggering_seek_info_dict["seek"]
-            return new_seek_val
-    except Exception as e:
-        print(e)
-        raise PreventUpdate
+    if (seek is not None):
+        return seek
+    else:
+        return 0
 
 
 # ========================

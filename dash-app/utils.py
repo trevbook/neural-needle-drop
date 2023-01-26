@@ -253,7 +253,7 @@ def segment_search(search_txt,
 
 def neural_tnd_video_search(search_str, year_filter_values,
                             video_type_filter_values, review_score_filter_values,
-                            print_timing=False):
+                            print_timing=False, return_emb=False):
     """
     This method will run 'neural search' across all of TheNeedleDrop's videos, using 
     the methodology I'd established with Pinecone and MySQL. 
@@ -423,13 +423,17 @@ def neural_tnd_video_search(search_str, year_filter_values,
     # # Executing the transcription query
     # top_segment_transcriptions_df = query_to_df(top_segment_transcriptions_query, print_error=True)
 
-    # Create the temporary table within the MySQL database
-    temp_table_creation_query = """
-    CREATE TEMPORARY TABLE top_transcriptions (
-        id VARCHAR(100),
-        segment INT
-    )"""
+    temp_table_name = "top_transcriptions"
+
+    temp_table_creation_query = f"""
+        CREATE TEMPORARY TABLE IF NOT EXISTS {temp_table_name} (
+            id VARCHAR(100),
+            segment INT
+        )"""
     cursor.execute(temp_table_creation_query)
+
+    truncate_table_query = f"TRUNCATE TABLE {temp_table_name}"
+    cursor.execute(truncate_table_query)
 
     # Insert data into the temporary table
     temp_table_insertion_query = """
@@ -494,4 +498,8 @@ def neural_tnd_video_search(search_str, year_filter_values,
 
     cursor.close()
 
-    return top_scored_video_info_df
+    if (not return_emb):
+        return top_scored_video_info_df
+    else:
+        return top_scored_video_info_df,  search_str_emb
+
