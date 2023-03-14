@@ -311,8 +311,6 @@ def update_and_open_modal(n_clicks,
         input_id = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
         video_id = json.loads(input_id)["video_id"]
 
-        print(f"\ntriggered_video_id is {input_id}\nn_clicks is {n_clicks}")
-
         # Generate the content for the modal
         modal_content = custom_components.generate_transcription_display(
             video_id, user_query, query_emb)
